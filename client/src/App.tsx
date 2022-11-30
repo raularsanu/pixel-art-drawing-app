@@ -1,17 +1,13 @@
 import React, { useState, useRef, useEffect, MouseEvent, ChangeEvent } from 'react';
 import ToolButton from "./components/ToolButton";
 import { Tools } from "./utils/consts";
+import { rgbToString, rgbToHex } from './utils/helpers';
 import "./App.css";
-
-interface Pixel {
-  color: string
-}
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctx = useRef<CanvasRenderingContext2D | null>(null);
   const isMouseDown = useRef(false);
-  const pixelMatrix = useRef<(null | Pixel)[][]>([]);
 
   const [tool, setTool] = useState(Tools.Pencil);
   const [color, setColor] = useState("black");
@@ -27,18 +23,6 @@ function App() {
     canvasRef.current.height = height * pixelWidthAndHeight;
     canvasRef.current.style.width = width * pixelWidthAndHeight + "px";
     canvasRef.current.style.height = height * pixelWidthAndHeight + "px";
-
-    if(pixelMatrix.current.length < height) {
-      for(let i = 0; i < height; i++) {
-        pixelMatrix.current = [...pixelMatrix.current, []];
-
-        for(let j = 0; j < width; j++) {
-          pixelMatrix.current[i] = [...pixelMatrix.current[i], null];
-        }
-      }
-    }
-
-    console.log(pixelMatrix.current)
   }, [])
 
   useEffect(() => {
@@ -72,7 +56,8 @@ function App() {
     switch(tool) {
       case Tools.Pencil: return drawPixel;
       case Tools.Eraser: return erasePixel;
-      case Tools.Bucket: return erasePixel;
+      case Tools.Bucket: return fillColor;
+      case Tools.Picker: return pickColor;
       default: return drawPixel;
     }
   }
@@ -82,10 +67,6 @@ function App() {
 
     const x = Math.floor(((Math.floor(e.nativeEvent.offsetX / pixelWidthAndHeight))/scale)) * pixelWidthAndHeight;
     const y = Math.floor(((Math.floor(e.nativeEvent.offsetY / pixelWidthAndHeight))/scale)) * pixelWidthAndHeight;
-
-    const newMatrix = [...pixelMatrix.current];
-    newMatrix[y/pixelWidthAndHeight][x/pixelWidthAndHeight] = { color: color };
-    pixelMatrix.current = newMatrix;
 
     ctx.current.fillStyle = color;
     ctx.current.beginPath();
@@ -99,16 +80,56 @@ function App() {
     const x = Math.floor(((Math.floor(e.nativeEvent.offsetX / pixelWidthAndHeight))/scale)) * pixelWidthAndHeight;
     const y = Math.floor(((Math.floor(e.nativeEvent.offsetY / pixelWidthAndHeight))/scale)) * pixelWidthAndHeight;
 
-    const newMatrix = [...pixelMatrix.current];
-    newMatrix[y/pixelWidthAndHeight][x/pixelWidthAndHeight] = null;
-    pixelMatrix.current = newMatrix;
-
     ctx.current.clearRect(x, y, pixelWidthAndHeight, pixelWidthAndHeight);
     ctx.current.closePath();
   }
 
-  function fillColor(): void {
-    
+  function floodFill(x: number, y: number, oldColor: string | null): void {
+    if(!ctx.current) return;
+
+    const pixelData = ctx.current.getImageData(x, y, 1, 1).data;
+    const pixelColor = rgbToString(pixelData[0], pixelData[1], pixelData[2], pixelData[3]);
+
+    if(pixelColor === oldColor) {
+      ctx.current.fillStyle = color;
+      ctx.current.beginPath();
+      ctx.current.fillRect(x, y, pixelWidthAndHeight, pixelWidthAndHeight);
+      ctx.current.closePath();
+
+      if(y + pixelWidthAndHeight <= height * pixelWidthAndHeight - pixelWidthAndHeight) {
+        floodFill(x, y + pixelWidthAndHeight, oldColor);
+      }
+      if(x + pixelWidthAndHeight <= width * pixelWidthAndHeight - pixelWidthAndHeight) {
+        floodFill(x + pixelWidthAndHeight, y, oldColor);
+      }
+      if(y - pixelWidthAndHeight >= 0) {
+        floodFill(x, y - pixelWidthAndHeight, oldColor);
+      }
+      if(x - pixelWidthAndHeight >= 0) {
+        floodFill(x - pixelWidthAndHeight, y, oldColor);
+      } 
+    }
+  }
+
+  function fillColor(e: MouseEvent): void {
+    if(!ctx.current) return;
+
+    const x = Math.floor(((Math.floor(e.nativeEvent.offsetX / pixelWidthAndHeight))/scale)) * pixelWidthAndHeight;
+    const y = Math.floor(((Math.floor(e.nativeEvent.offsetY / pixelWidthAndHeight))/scale)) * pixelWidthAndHeight;
+    const pixelData = ctx.current.getImageData(e.nativeEvent.offsetX, e.nativeEvent.offsetY, 1, 1).data;
+    const oldColor = rgbToString(pixelData[0], pixelData[1], pixelData[2], pixelData[3]);
+
+    floodFill(x, y, oldColor);
+  }
+
+  function pickColor(e: MouseEvent) {
+    if(!ctx.current) return;
+    const pixelData = ctx.current.getImageData(e.nativeEvent.offsetX, e.nativeEvent.offsetY, 1, 1).data;
+    const newColor = rgbToString(pixelData[0], pixelData[1], pixelData[2], pixelData[3]);
+
+    if(newColor !== null) {
+      setColor(rgbToHex(newColor));
+    }
   }
 
   function handleColorChange(e: ChangeEvent<HTMLInputElement>): void {
@@ -129,6 +150,7 @@ function App() {
         <ToolButton onClick={() => { setTool(Tools.Pencil) }} message="Pen" globalTool={tool} buttonTool={Tools.Pencil}/>
         <ToolButton onClick={() => { setTool(Tools.Eraser) }} message="Eraser" globalTool={tool} buttonTool={Tools.Eraser}/>
         <ToolButton onClick={() => { setTool(Tools.Bucket) }} message="Bucket" globalTool={tool} buttonTool={Tools.Bucket}/>
+        <ToolButton onClick={() => { setTool(Tools.Picker) }} message="Picker" globalTool={tool} buttonTool={Tools.Picker}/>
 
         <button onClick={zoomIn}>Zoom In</button>
         <button onClick={zoomOut}>Zoom Out</button>
