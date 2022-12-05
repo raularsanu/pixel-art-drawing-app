@@ -1,0 +1,25 @@
+.tool-button-container {
+    position: relative;
+    box-sizing: border-box;
+    padding: 5px 20px;
+}
+
+.button {
+    border: 2px solid white;
+    background: #7743DB;
+    box-sizing: border-box;
+    width: 100%;
+    height: 60px;
+    cursor: pointer;
+}
+
+.button-selected {
+    background: #FFE9B1;
+}
+
+.tool-button-container span {
+    position: relative;
+    margin-top: 10px;
+    color: white;
+}
+
